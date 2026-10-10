@@ -7,7 +7,7 @@ import psycopg
 from dotenv import load_dotenv
 from psycopg import sql
 
-# Carrega as configurações do arquivo .env
+# Carrega as configurações do arquivo .env (importante para obter as informações do nosso banco e manter as mesmas protegidas )
 load_dotenv()
 
 PASTA_DADOS = Path("dados/tratados")
@@ -19,7 +19,7 @@ ARQUIVOS = {
 
 
 def converter_tipo(tipo):
-    """Converte os tipos do Pandas para tipos do PostgreSQL."""
+    """Converte os tipos do Pandas (resultado do ETL de Murilo) para tipos do PostgreSQL (nosso banco no Aiven)."""
     if pd.api.types.is_integer_dtype(tipo):
         return "BIGINT"
 
@@ -30,7 +30,7 @@ def converter_tipo(tipo):
 
 
 def preparar_valor(valor):
-    """Converte valores ausentes em NULL e tipos NumPy em tipos Python."""
+    """Converte valores ausentes em NULL  e tipos NumPy (nossos dados pós ETL) em tipos Python."""
     if pd.isna(valor):
         return None
 
@@ -41,7 +41,7 @@ def preparar_valor(valor):
 
 
 def main():
-    # Configurações de conexão com o PostgreSQL da Aiven
+    # Configurações de conexão com o PostgreSQL da Aiven (variáveis do nosso arquivo .env)
     configuracao = {
         "host": os.getenv("DB_HOST"),
         "port": os.getenv("DB_PORT"),
@@ -61,7 +61,7 @@ def main():
                 f"A configuração {chave} não foi encontrada no .env."
             )
 
-    # Abre a conexão com o banco
+    # Abre a conexão com o banco (Pg do Aiven)
     with psycopg.connect(**configuracao) as conexao:
         with conexao.cursor() as cursor:
 
@@ -74,7 +74,7 @@ def main():
                         f"Arquivo não encontrado: {caminho}"
                     )
 
-                # Lê os dados tratados
+                # Lê os dados tratados (pós ETL)
                 df = pd.read_csv(caminho)
 
                 # Cria a tabela caso ela ainda não exista
@@ -93,7 +93,7 @@ def main():
                     )
                 )
 
-                # Verifica se a tabela já possui registros
+                # Verifica se a tabela já possui registros (medida de precaução se rodarmos novamente)
                 cursor.execute(
                     sql.SQL("SELECT EXISTS (SELECT 1 FROM {} LIMIT 1)").format(
                         sql.Identifier(tabela)
@@ -109,7 +109,7 @@ def main():
                     )
                     continue
 
-                # Prepara as colunas e os parâmetros do INSERT
+                # Prepara as colunas e os parâmetros do INSERT (identificar colunas a partir dos Dataframes do ETL de Murilo)
                 colunas_sql = sql.SQL(", ").join(
                     sql.Identifier(coluna) for coluna in df.columns
                 )
@@ -126,7 +126,7 @@ def main():
                     marcadores,
                 )
 
-                # Converte as linhas para valores aceitos pelo PostgreSQL
+                # Converte as linhas para valores aceitos pelo PostgreSQL 
                 registros = [
                     tuple(preparar_valor(valor) for valor in linha)
                     for linha in df.itertuples(index=False, name=None)
@@ -141,7 +141,7 @@ def main():
                     f"{len(registros)} registros carregados."
                 )
 
-        # Confirma a transação quando as operações terminam
+        # Confirma a transação quando as operações terminam (Bom para manter controle)
         conexao.commit()
 
     print("\nProcesso de carga finalizado.")
